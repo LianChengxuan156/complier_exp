@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>词法分析器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 25px;
+        }
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .mode-btn {
+            padding: 10px 20px;
+            border: 2px solid #3498db;
+            background: white;
+            color: #3498db;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .mode-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        .mode-panel {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+        .mode-panel.active {
+            display: block;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 70px;
+        }
+        .btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            background: #219a52;
+        }
+        .btn-small {
+            padding: 6px 14px;
+            font-size: 14px;
+        }
+        .output {
+            margin-top: 15px;
+            padding: 12px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 40px;
+        }
+        .viz-section {
+            margin-top: 20px;
+            border: 1px solid #bdc3c7;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fff;
+        }
+        .viz-section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .code-display {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.8;
+            margin-bottom: 15px;
+            border: 1px solid #bdc3c7;
+        }
+        .code-display span {
+            position: relative;
+        }
+        .highlight {
+            background: #f1c40f;
+            border-radius: 3px;
+            padding: 2px 2px;
+            box-shadow: 0 0 8px rgba(241,196,15,0.7);
+            transition: background 0.2s;
+        }
+        .token-info {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        .token-info strong {
+            color: #e74c3c;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .step-slider {
+            flex: 1;
+        }
+        #downloadLink {
+            display: inline-block;
+            margin-top: 12px;
+            color: #3498db;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>词法分析器（Scanner）</h1>
+        <p class="subtitle"></p>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="1">模式 1：单词列表</button>
+            <button class="mode-btn" data-mode="2">模式 2：单行代码</button>
+            <button class="mode-btn" data-mode="3">模式 3：文件分析</button>
+        </div>
+
+        <!-- 模式 1 -->
+        <div id="mode1" class="mode-panel active">
+            <label for="wordsInput">输入多个单词（用空格分隔）：</label>
+            <input type="text" id="wordsInput" placeholder="例如：id if 485 841.6541 www">
+            <button class="btn" onclick="runMode1()">分析</button>
+            <div id="output1" class="output"></div>
+            <div id="viz1" class="viz-section"></div>
+        </div>
+
+        <!-- 模式 2 -->
+        <div id="mode2" class="mode-panel">
+            <label for="codeInput">输入一行代码：</label>
+            <textarea id="codeInput" rows="3" placeholder="例如：while(true) {int a=0;}"></textarea>
+            <button class="btn" onclick="runMode2()">分析</button>
+            <div id="output2" class="output"></div>
+            <div id="viz2" class="viz-section"></div>
+        </div>
+
+        <!-- 模式 3 -->
+        <div id="mode3" class="mode-panel">
+            <label for="fileInput">选择一个源代码文件：</label>
+            <input type="file" id="fileInput" accept=".c,.txt">
+            <button class="btn" onclick="runMode3()">分析文件</button>
+            <div id="output3" class="output"></div>
+            <div id="viz3" class="viz-section"></div>
+            <a id="downloadLink" style="display:none;">下载 Token 序列 (output.txt)</a>
+        </div>
+    </div>
+
+    <script>
+        // ===================== 词法分析器 =====================
+        const tokenOutput = {
+            IF: 'IF', ELSE: 'ELSE', WHILE: 'WHILE', RETURN: 'RETURN', INPUT: 'INPUT', PRINT: 'PRINT',
+            ID: 'ID', NUM: 'NUM', FLOAT: 'FLOAT',
+            LPAR: 'LPAR', RPAR: 'RPAR', LBR: 'LBR', RBR: 'RBR',
+            SEMI: 'SEMI', ASG: 'ASSIGN',
+            PLUS: 'PLUS', MINUS: 'MINUS', MUL: 'MUL', DIV: 'DIV',
+            DOT: 'DOT', END: 'END'
+        };
+
+        const keywords = {
+            'if': 'IF', 'else': 'ELSE', 'while': 'WHILE', 'return': 'RETURN',
+            'input': 'INPUT', 'print': 'PRINT'
+        };
+
+        class Scanner {
+            constructor(source) {
+                this.source = source;
+                this.pos = 0;
+            }
+
+            isAlpha(c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+            isDigit(c) { return c >= '0' && c <= '9'; }
+            isAlnumOr_(c) { return this.isAlpha(c) || this.isDigit(c) || c === '_'; }
+
+            skipWhitespace() {
+                while (this.pos < this.source.length &&
+                    (this.source[this.pos] === ' ' || this.source[this.pos] === '\t' || this.source[this.pos] === '\n')) {
+                    this.pos++;
+                }
+            }
+
+            getToken() {
+                while (true) {
+                    this.skipWhitespace();
+                    if (this.pos >= this.source.length) {
+                        return { type: 'END', lexeme: '', start: this.pos, end: this.pos };
+                    }
+
+                    const startPos = this.pos;
+                    const c = this.source[this.pos];
+
+                    if (this.isAlpha(c) || c === '_') {
+                        const lexeme = this.readIdentifier();
+                        const keyType = keywords[lexeme.toLowerCase()];
+                        const type = keyType || 'ID';
+                        return { type, lexeme, start: startPos, end: this.pos };
+                    }
+
+                    if (this.isDigit(c) || (c === '.' && this.pos + 1 < this.source.length && this.isDigit(this.source[this.pos + 1]))) {
+                        return this.readNumber(startPos);
+                    }
+
+                    if (c === '.') {
+                        this.pos++;
+                        return { type: 'DOT', lexeme: '.', start: startPos, end: this.pos };
+                    }
+
+                    const token = this.readOperator(startPos);
+                    if (token.type === 'END') continue;
+                    return token;
+                }
+            }
+
+            readIdentifier() {
+                const start = this.pos;
+                while (this.pos < this.source.length && this.isAlnumOr_(this.source[this.pos])) this.pos++;
+                return this.source.substring(start, this.pos);
+            }
+
+            readNumber(startPos) {
+                let hasDot = false, hasExp = false;
+                if (this.isDigit(this.source[this.pos])) {
+                    while (this.pos < this.source.length && this.isDigit(this.source[this.pos])) this.pos++;
+                }
+                if (this.pos < this.source.length && this.source[this.pos] === '.') {
+                    hasDot = true;
+                    this.pos++;
+                    while (this.pos < this.source.length && this.isDigit(this.source[this.pos])) this.pos++;
+                }
+                if (this.pos < this.source.length && (this.source[this.pos] === 'e' || this.source[this.pos] === 'E')) {
+                    hasExp = true;
+                    this.pos++;
+                    if (this.pos < this.source.length && (this.source[this.pos] === '+' || this.source[this.pos] === '-')) this.pos++;
+                    if (this.pos < this.source.length && this.isDigit(this.source[this.pos])) {
+                        while (this.pos < this.source.length && this.isDigit(this.source[this.pos])) this.pos++;
+                    } else {
+                        this.pos = startPos;
+                        const firstChar = this.source[this.pos];
+                        this.pos++;
+                        if (firstChar === '.') return { type: 'DOT', lexeme: '.', start: startPos, end: this.pos };
+                        return { type: 'NUM', lexeme: firstChar, start: startPos, end: this.pos };
+                    }
+                }
+                const lexeme = this.source.substring(startPos, this.pos);
+                return { type: (hasDot || hasExp) ? 'FLOAT' : 'NUM', lexeme, start: startPos, end: this.pos };
+            }
+
+            readOperator(startPos) {
+                const c = this.source[this.pos++];
+                switch (c) {
+                    case '(': return { type: 'LPAR', lexeme: '(', start: startPos, end: this.pos };
+                    case ')': return { type: 'RPAR', lexeme: ')', start: startPos, end: this.pos };
+                    case '{': return { type: 'LBR', lexeme: '{', start: startPos, end: this.pos };
+                    case '}': return { type: 'RBR', lexeme: '}', start: startPos, end: this.pos };
+                    case ';': return { type: 'SEMI', lexeme: ';', start: startPos, end: this.pos };
+                    case '=': return { type: 'ASG', lexeme: '=', start: startPos, end: this.pos };
+                    case '+': return { type: 'PLUS', lexeme: '+', start: startPos, end: this.pos };
+                    case '-': return { type: 'MINUS', lexeme: '-', start: startPos, end: this.pos };
+                    case '*': return { type: 'MUL', lexeme: '*', start: startPos, end: this.pos };
+                    case '/': return { type: 'DIV', lexeme: '/', start: startPos, end: this.pos };
+                    default:  return { type: 'END', lexeme: c, start: startPos, end: this.pos };
+                }
+            }
+        }
+
+        // ===================== 可视化构建 =====================
+        function buildVisualization(containerId, sourceCode, tokens) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (tokens.length === 0) {
+                container.innerHTML = '<p>没有识别到任何Token。</p>';
+                return;
+            }
+
+            const codeSpans = [];
+            for (let i = 0; i < sourceCode.length; i++) {
+                const span = document.createElement('span');
+                span.textContent = sourceCode[i];
+                span.dataset.index = i;
+                codeSpans.push(span);
+            }
+
+            const codeDisplay = document.createElement('div');
+            codeDisplay.className = 'code-display';
+            codeSpans.forEach(sp => codeDisplay.appendChild(sp));
+            container.appendChild(codeDisplay);
+
+            const tokenInfo = document.createElement('div');
+            tokenInfo.className = 'token-info';
+            tokenInfo.innerHTML = '步骤 <strong>0</strong> / ' + tokens.length + ' — 尚未开始';
+            container.appendChild(tokenInfo);
+
+            const controls = document.createElement('div');
+            controls.className = 'controls';
+            controls.innerHTML = `
+                <button class="btn btn-small" id="${containerId}-prev">上一步</button>
+                <button class="btn btn-small" id="${containerId}-next">下一步</button>
+                <input type="range" class="step-slider" id="${containerId}-slider" min="0" max="${tokens.length}" value="0" step="1">
+                <span id="${containerId}-stepLabel">0/${tokens.length}</span>
+            `;
+            container.appendChild(controls);
+
+            let currentStep = 0;
+
+            function updateView(step) {
+                codeSpans.forEach(sp => sp.classList.remove('highlight'));
+                if (step === 0) {
+                    tokenInfo.innerHTML = `步骤 <strong>0</strong> / ${tokens.length} — 尚未开始`;
+                } else {
+                    const token = tokens[step - 1];
+                    for (let i = token.start; i < token.end; i++) {
+                        if (codeSpans[i]) codeSpans[i].classList.add('highlight');
+                    }
+                    // 修改：去掉“词位:”二字，直接显示 Token 类型和单词
+                    tokenInfo.innerHTML = `步骤 <strong>${step}</strong> / ${tokens.length} — Token: <strong>${token.type}</strong> "${token.lexeme}"`;
+                }
+                document.getElementById(`${containerId}-slider`).value = step;
+                document.getElementById(`${containerId}-stepLabel`).textContent = `${step}/${tokens.length}`;
+                currentStep = step;
+            }
+
+            document.getElementById(`${containerId}-prev`).addEventListener('click', () => {
+                if (currentStep > 0) updateView(currentStep - 1);
+            });
+            document.getElementById(`${containerId}-next`).addEventListener('click', () => {
+                if (currentStep < tokens.length) updateView(currentStep + 1);
+            });
+            document.getElementById(`${containerId}-slider`).addEventListener('input', () => {
+                updateView(parseInt(document.getElementById(`${containerId}-slider`).value));
+            });
+
+            updateView(0);
+        }
+
+        // ===================== 面板切换 =====================
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                const mode = this.getAttribute('data-mode');
+                document.querySelectorAll('.mode-panel').forEach(panel => panel.classList.remove('active'));
+                document.getElementById('mode' + mode).classList.add('active');
+            });
+        });
+
+        // ===================== 模式1：单词列表（整体扫描 + 可视化） =====================
+        function runMode1() {
+            const input = document.getElementById('wordsInput').value.trim();
+            const outputDiv = document.getElementById('output1');
+            if (!input) {
+                outputDiv.innerText = '请输入单词列表。';
+                document.getElementById('viz1').innerHTML = '';
+                return;
+            }
+
+            const scanner = new Scanner(input);
+            const tokens = [];
+            let token;
+            while ((token = scanner.getToken()).type !== 'END') {
+                tokens.push({
+                    type: tokenOutput[token.type],
+                    lexeme: token.lexeme,
+                    start: token.start,
+                    end: token.end
+                });
+            }
+
+            // 输出：每行一个 Token 类型（符合原样例）
+            outputDiv.innerText = tokens.map(t => t.type).join('\n');
+
+            // 可视化
+            buildVisualization('viz1', input, tokens);
+        }
+
+        // ===================== 模式2：单行代码（整体扫描 + 可视化） =====================
+        function runMode2() {
+            const code = document.getElementById('codeInput').value;
+            const outputDiv = document.getElementById('output2');
+            if (!code.trim()) {
+                outputDiv.innerText = '请输入一行代码。';
+                document.getElementById('viz2').innerHTML = '';
+                return;
+            }
+
+            const scanner = new Scanner(code);
+            const tokens = [];
+            let token;
+            while ((token = scanner.getToken()).type !== 'END') {
+                tokens.push({
+                    type: tokenOutput[token.type],
+                    lexeme: token.lexeme,
+                    start: token.start,
+                    end: token.end
+                });
+            }
+
+            outputDiv.innerText = tokens.map(t => t.type).join(' ');
+            buildVisualization('viz2', code, tokens);
+        }
+
+        // ===================== 模式3：文件分析（整体扫描 + 可视化 + 下载） =====================
+        function runMode3() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const outputDiv = document.getElementById('output3');
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.style.display = 'none';
+
+            if (!file) {
+                alert('请先选择一个文件。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const scanner = new Scanner(content);
+                const tokens = [];
+                let token;
+                while ((token = scanner.getToken()).type !== 'END') {
+                    tokens.push({
+                        type: tokenOutput[token.type],
+                        lexeme: token.lexeme,
+                        start: token.start,
+                        end: token.end
+                    });
+                }
+
+                outputDiv.innerText = tokens.map(t => t.type).join(' ');
+
+                const blob = new Blob([tokens.map(t => t.type).join(' ')], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                downloadLink.href = url;
+                downloadLink.download = 'output.txt';
+                downloadLink.style.display = 'inline-block';
+                downloadLink.innerText = '下载 Token 序列 (output.txt)';
+
+                buildVisualization('viz3', content, tokens);
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
