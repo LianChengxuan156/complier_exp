@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LR(0) 项目集规范族构造器 </title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: #eef2f5;
+            font-family: 'Segoe UI', 'Roboto', 'Fira Code', monospace;
+            margin: 0;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 25px 40px -12px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        header {
+            background: #0b2b38;
+            color: white;
+            padding: 1.6rem 2rem;
+        }
+        header h1 {
+            margin: 0 0 0.3rem;
+            font-size: 1.9rem;
+            font-weight: 600;
+        }
+        header p {
+            margin: 0;
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+        .flex-pane {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+        }
+        .input-area {
+            flex: 1.2;
+            background: #f9fbfd;
+            padding: 1.8rem;
+            border-right: 1px solid #e0e8f0;
+        }
+        .output-area {
+            flex: 2;
+            padding: 1.8rem;
+            background: #ffffff;
+            overflow-x: auto;
+        }
+        textarea {
+            width: 100%;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 16px;
+            background: #fff;
+            resize: vertical;
+            line-height: 1.5;
+        }
+        button {
+            background: #1f6392;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 1rem;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #0e4b6e;
+            transform: scale(0.98);
+        }
+        .example-btn {
+            background: #3a6b4b;
+            margin-left: 0.8rem;
+        }
+        .example-btn:hover {
+            background: #2c553c;
+        }
+        h3 {
+            font-size: 1.3rem;
+            margin: 0 0 0.8rem 0;
+            color: #155e75;
+            border-left: 4px solid #2c9c7c;
+            padding-left: 12px;
+        }
+        pre {
+            background: #1e2a2e;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 18px;
+            overflow-x: auto;
+            font-size: 13px;
+            font-family: 'Fira Code', monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .state-block {
+            background: #f1f5f9;
+            margin: 1rem 0;
+            border-radius: 16px;
+            padding: 0.8rem 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .state-title {
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 0.3rem;
+            color: #0c4a6e;
+        }
+        .transition-item {
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .warning {
+            background: #fee2e2;
+            border-left: 4px solid #dc2626;
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            margin: 0.6rem 0;
+        }
+        hr {
+            margin: 1.2rem 0;
+            border-color: #e2edf2;
+        }
+        footer {
+            background: #f1f5f9;
+            padding: 0.8rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #475569;
+        }
+        @media (max-width: 780px) {
+            .flex-pane { flex-direction: column; }
+            .input-area { border-right: none; border-bottom: 1px solid #e0e8f0; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>LR(0) 项目集规范族构造器</h1>
+        <p>输入文法 → 增广 → 闭包&Goto → 输出所有状态、转移表、冲突检测 </p>
+    </header>
+    <div class="flex-pane">
+        <div class="input-area">
+            <h3>文法输入</h3>
+            <textarea id="grammarInput" rows="8" placeholder="示例文法 (符号间用空格隔开，支持|分割候选式)：
+E -> E + T | T
+T -> T * F | F
+F -> ( E ) | id"></textarea>
+            <div>
+                <button id="buildBtn">构造 LR(0) 自动机</button>
+                <button id="exampleBtn" class="example-btn"> 载入示例文法</button>
+            </div>
+            <div style="margin-top: 1.2rem; font-size: 0.75rem; color: #4b5563;">
+                提示：每条产生式一行，使用 "->" 分隔，右侧可用 "|" 表示多个候选。<br>
+                终结符与非终结符自动识别 (左部为非终结符，其余符号默认终结符，但左部出现过的为非终结符)
+            </div>
+        </div>
+        <div class="output-area" id="outputArea">
+            <h3>输出结果</h3>
+            <div style="color: #6c757d;">点击上方按钮，生成 LR(0) 项目集规范族、Goto 转移和冲突报告…</div>
+        </div>
+    </div>
+    <footer>
+    </footer>
+</div>
+
+<script>
+    // ---------- 辅助函数 ----------
+    function trim(s) {
+        return s.replace(/^\s+|\s+$/g, '');
+    }
+
+    function splitBySpace(str) {
+        return str.trim().split(/\s+/).filter(s => s.length > 0);
+    }
+
+    // 解析输入文本 -> 产生式列表 [{lhs, rhs:[]}]
+    function parseGrammar(text) {
+        const lines = text.split(/\r?\n/);
+        const productions = [];
+        for (let line of lines) {
+            line = trim(line);
+            if (line === "") continue;
+            let arrowPos = line.indexOf("->");
+            if (arrowPos === -1) continue;
+            let lhs = trim(line.substring(0, arrowPos));
+            let rhsPart = trim(line.substring(arrowPos + 2));
+            let alternatives = rhsPart.split('|').map(s => trim(s));
+            for (let alt of alternatives) {
+                let rhsSymbols = splitBySpace(alt);
+                if (rhsSymbols.length === 0 && alt !== "") rhsSymbols = [alt];
+                if (rhsSymbols.length > 0) {
+                    productions.push({ lhs: lhs, rhs: rhsSymbols });
+                }
+            }
+        }
+        return productions;
+    }
+
+    // 构建文法对象：识别非终结符、终结符，确定起始符号
+    function buildGrammar(productions) {
+        const nonTerminals = new Set();
+        const terminals = new Set();
+        for (let prod of productions) {
+            nonTerminals.add(prod.lhs);
+        }
+        for (let prod of productions) {
+            for (let sym of prod.rhs) {
+                if (!nonTerminals.has(sym)) {
+                    terminals.add(sym);
+                }
+            }
+        }
+        let startSymbol = productions.length > 0 ? productions[0].lhs : null;
+        return {
+            productions: productions,
+            nonTerminals: nonTerminals,
+            terminals: terminals,
+            start: startSymbol
+        };
+    }
+
+    // 增广文法: 返回新产生式列表，新起始符号
+    function augmentGrammar(gram) {
+        const newStart = gram.start + "'";
+        const augmentedProds = [
+            { lhs: newStart, rhs: [gram.start] },
+            ...gram.productions
+        ];
+        const newNonTerminals = new Set(gram.nonTerminals);
+        newNonTerminals.add(newStart);
+        return {
+            productions: augmentedProds,
+            nonTerminals: newNonTerminals,
+            terminals: new Set(gram.terminals),
+            start: newStart,
+            originalStart: gram.start
+        };
+    }
+
+    // LR(0) 项目: prodIdx, dotPos
+    class Item {
+        constructor(prodIdx, dotPos) {
+            this.prodIdx = prodIdx;
+            this.dotPos = dotPos;
+        }
+        equals(other) {
+            return this.prodIdx === other.prodIdx && this.dotPos === other.dotPos;
+        }
+        key() {
+            return `${this.prodIdx},${this.dotPos}`;
+        }
+    }
+
+    // 闭包计算
+    function closure(itemsSet, grammar) {
+        let workList = Array.from(itemsSet);
+        let closureSet = new Map(); // key -> Item
+        for (let it of itemsSet) closureSet.set(it.key(), it);
+        while (workList.length > 0) {
+            let item = workList.shift();
+            let prod = grammar.productions[item.prodIdx];
+            if (item.dotPos < prod.rhs.length) {
+                let symbol = prod.rhs[item.dotPos];
+                if (grammar.nonTerminals.has(symbol)) {
+                    // 添加所有该非终结符的产生式的初始项目
+                    for (let i = 0; i < grammar.productions.length; i++) {
+                        let p = grammar.productions[i];
+                        if (p.lhs === symbol) {
+                            let newItem = new Item(i, 0);
+                            if (!closureSet.has(newItem.key())) {
+                                closureSet.set(newItem.key(), newItem);
+                                workList.push(newItem);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new Set(closureSet.values());
+    }
+
+    // Goto(I, X)
+    function goto(itemsSet, symbol, grammar) {
+        let moved = [];
+        for (let item of itemsSet) {
+            let prod = grammar.productions[item.prodIdx];
+            if (item.dotPos < prod.rhs.length && prod.rhs[item.dotPos] === symbol) {
+                moved.push(new Item(item.prodIdx, item.dotPos + 1));
+            }
+        }
+        if (moved.length === 0) return new Set();
+        return closure(new Set(moved), grammar);
+    }
+
+    // 项目集转为可读字符串
+    function itemToString(item, grammar) {
+        let prod = grammar.productions[item.prodIdx];
+        let rhsParts = [...prod.rhs];
+        let before = rhsParts.slice(0, item.dotPos);
+        let after = rhsParts.slice(item.dotPos);
+        let rhsDisplay = [...before, '.', ...after].join(' ');
+        if (item.dotPos === prod.rhs.length) rhsDisplay = [...before, '.'].join(' ');
+        return `${prod.lhs} -> ${rhsDisplay}`;
+    }
+
+    // 构造 LR(0) 自动机
+    function buildLR0Automaton(grammar) {
+        // 寻找起始产生式 (左部 == grammar.start)
+        let startProdIdx = -1;
+        for (let i = 0; i < grammar.productions.length; i++) {
+            if (grammar.productions[i].lhs === grammar.start) {
+                startProdIdx = i;
+                break;
+            }
+        }
+        if (startProdIdx === -1) throw new Error("起始产生式未找到");
+        const startItem = new Item(startProdIdx, 0);
+        let initialClosure = closure(new Set([startItem]), grammar);
+        let states = [];          // 存储 item set (Set<Item>)
+        let transitions = [];     // 每个状态: { symbol: nextStateIdx }
+        let stateMap = new Map(); // 序列化后的key -> index
+
+        function serializeItemSet(itemSet) {
+            let items = Array.from(itemSet);
+            items.sort((a,b) => {
+                if (a.prodIdx !== b.prodIdx) return a.prodIdx - b.prodIdx;
+                return a.dotPos - b.dotPos;
+            });
+            return items.map(it => it.key()).join('|');
+        }
+
+        function addState(itemSet) {
+            let key = serializeItemSet(itemSet);
+            if (stateMap.has(key)) return stateMap.get(key);
+            let idx = states.length;
+            states.push(itemSet);
+            transitions.push({});
+            stateMap.set(key, idx);
+            return idx;
+        }
+
+        let initialIdx = addState(initialClosure);
+        let worklist = [initialIdx];
+
+        while (worklist.length > 0) {
+            let curIdx = worklist.shift();
+            let curItems = states[curIdx];
+            // 收集所有可转移的符号（圆点后的符号）
+            let symbols = new Set();
+            for (let item of curItems) {
+                let prod = grammar.productions[item.prodIdx];
+                if (item.dotPos < prod.rhs.length) {
+                    symbols.add(prod.rhs[item.dotPos]);
+                }
+            }
+            for (let sym of symbols) {
+                let nextSet = goto(curItems, sym, grammar);
+                if (nextSet.size === 0) continue;
+                let nextIdx = addState(nextSet);
+                transitions[curIdx][sym] = nextIdx;
+                if (nextIdx === states.length - 1) {
+                    worklist.push(nextIdx);
+                }
+            }
+        }
+        return { states, transitions };
+    }
+
+    // 冲突检测
+    function detectConflicts(states, grammar) {
+        let conflicts = [];
+        for (let i = 0; i < states.length; i++) {
+            let items = states[i];
+            let shiftSymbols = new Set();
+            let reduceItems = [];
+            for (let it of items) {
+                let prod = grammar.productions[it.prodIdx];
+                if (it.dotPos === prod.rhs.length) {
+                    reduceItems.push(it);
+                } else {
+                    let nextSym = prod.rhs[it.dotPos];
+                    if (grammar.terminals.has(nextSym)) {
+                        shiftSymbols.add(nextSym);
+                    }
+                }
+            }
+            if (shiftSymbols.size > 0 && reduceItems.length > 0) {
+                conflicts.push({
+                    type: "shift-reduce",
+                    state: i,
+                    shiftSymbols: Array.from(shiftSymbols),
+                    reduceItems: reduceItems
+                });
+            }
+            if (reduceItems.length >= 2) {
+                conflicts.push({
+                    type: "reduce-reduce",
+                    state: i,
+                    reduceItems: reduceItems
+                });
+            }
+        }
+        return conflicts;
+    }
+
+    // 生成完整输出HTML
+    function generateOutput(grammar, states, transitions, conflicts) {
+        let html = `<div style="font-family: monospace; font-size: 0.85rem;">`;
+        // 增广文法
+        html += `<div class="state-block"><div class="state-title">Augmented Grammar</div>`;
+        for (let i = 0; i < grammar.productions.length; i++) {
+            let p = grammar.productions[i];
+            html += `<div>${p.lhs} -> ${p.rhs.join(' ')}</div>`;
+        }
+        html += `</div>`;
+
+        // 项目集规范族
+        html += `<div class="state-block"><div class="state-title"> LR(0) Item Sets (Canonical Collection)</div>`;
+        for (let i = 0; i < states.length; i++) {
+            let items = states[i];
+            let itemList = Array.from(items);
+            itemList.sort((a,b) => {
+                if (a.prodIdx !== b.prodIdx) return a.prodIdx - b.prodIdx;
+                return a.dotPos - b.dotPos;
+            });
+            html += `<div style="margin-top: 12px;"><strong>State ${i}:</strong><br>`;
+            for (let it of itemList) {
+                html += `&nbsp;&nbsp;&nbsp;${itemToString(it, grammar)}<br>`;
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+
+        // Goto 转移
+        html += `<div class="state-block"><div class="state-title"> Goto Transitions</div>`;
+        for (let i = 0; i < transitions.length; i++) {
+            for (let [sym, target] of Object.entries(transitions[i])) {
+                html += `<div class="transition-item">State ${i} --${sym}--> State ${target}</div>`;
+            }
+        }
+        html += `</div>`;
+
+        // 冲突检测
+        html += `<div class="state-block"><div class="state-title">LR(0) Conflict Detection</div>`;
+        if (conflicts.length === 0) {
+            html += `<div style="color: #2b6e3c;"> This grammar is LR(0). No conflicts.</div>`;
+        } else {
+            html += `<div style="color: #b91c1c;"> This grammar is NOT LR(0). Conflicts found:</div>`;
+            for (let cf of conflicts) {
+                if (cf.type === "shift-reduce") {
+                    html += `<div class="warning">⚠ State ${cf.state} : shift-reduce conflict<br>`;
+                    html += `   Shift symbols: ${cf.shiftSymbols.join(', ')}<br>`;
+                    html += `   Reduce items: ${cf.reduceItems.map(it => itemToString(it, grammar)).join(' ; ')}</div>`;
+                } else {
+                    html += `<div class="warning">⚠ State ${cf.state} : reduce-reduce conflict<br>`;
+                    html += `   Reduce items: ${cf.reduceItems.map(it => itemToString(it, grammar)).join(' ; ')}</div>`;
+                }
+            }
+        }
+        html += `</div>`;
+        html += `</div>`;
+        return html;
+    }
+
+    // 主流程
+    function buildLR0FromInput(inputText) {
+        try {
+            let productions = parseGrammar(inputText);
+            if (productions.length === 0) throw new Error("没有有效的产生式！");
+            let basicGrammar = buildGrammar(productions);
+            let augmented = augmentGrammar(basicGrammar);
+            let { states, transitions } = buildLR0Automaton(augmented);
+            let conflicts = detectConflicts(states, augmented);
+            return generateOutput(augmented, states, transitions, conflicts);
+        } catch (err) {
+            return `<div style="color: #c00; background:#ffe6e6; padding:1rem; border-radius: 14px;"> 错误: ${err.message}<br>请检查文法格式，确保每行形如 "A -> B C | D"</div>`;
+        }
+    }
+
+    // UI 交互
+    const grammarTextarea = document.getElementById('grammarInput');
+    const outputDiv = document.getElementById('outputArea');
+    const buildBtn = document.getElementById('buildBtn');
+    const exampleBtn = document.getElementById('exampleBtn');
+
+    const defaultExample = `E -> E + T | T
+T -> T * F | F
+F -> ( E ) | id`;
+
+    function setExample() {
+        grammarTextarea.value = defaultExample;
+        buildLR0();
+    }
+
+    function buildLR0() {
+        let input = grammarTextarea.value;
+        if (!input.trim()) {
+            outputDiv.innerHTML = `<div style="color:#a00;">请输入文法 (例如: E -> E + T | T)</div>`;
+            return;
+        }
+        let resultHtml = buildLR0FromInput(input);
+        outputDiv.innerHTML = `<h3> 输出结果</h3>` + resultHtml;
+    }
+
+    buildBtn.addEventListener('click', buildLR0);
+    exampleBtn.addEventListener('click', setExample);
+    // 页面初始加载示例
+    setExample();
+</script>
+</body>
+</html>
