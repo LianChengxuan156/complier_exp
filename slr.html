@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LR(0) & SLR(1) 分析器</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: #eef2f5;
+            font-family: 'Segoe UI', 'Roboto', 'Fira Code', monospace;
+            margin: 0;
+            padding: 1rem;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 25px 40px -12px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        header {
+            background: #0b2b38;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            flex-shrink: 0;
+        }
+        header h1 {
+            margin: 0 0 0.2rem;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        header p {
+            margin: 0;
+            opacity: 0.8;
+            font-size: 0.75rem;
+        }
+        .split-pane {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* 左侧：输入区 + LR(0) 输出 */
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e0e8f0;
+            background: #f9fbfd;
+            overflow: hidden;
+        }
+        .input-area {
+            background: #f9fbfd;
+            padding: 1rem 1.2rem;
+            border-bottom: 1px solid #e0e8f0;
+            flex-shrink: 0;
+        }
+        textarea {
+            width: 100%;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 16px;
+            background: #fff;
+            resize: vertical;
+            line-height: 1.4;
+        }
+        button {
+            background: #1f6392;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            font-size: 0.85rem;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 0.6rem;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #0e4b6e;
+            transform: scale(0.98);
+        }
+        .example-btn {
+            background: #3a6b4b;
+            margin-left: 0.6rem;
+        }
+        .example-btn:hover {
+            background: #2c553c;
+        }
+        .lr0-output {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.2rem;
+            background: #ffffff;
+        }
+        /* 右侧：仅 SLR(1) 输出 */
+        .right-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.2rem;
+            background: #ffffff;
+        }
+        h3 {
+            font-size: 1.1rem;
+            margin: 0 0 0.6rem 0;
+            color: #155e75;
+            border-left: 4px solid #2c9c7c;
+            padding-left: 10px;
+        }
+        .state-block {
+            background: #f1f5f9;
+            margin: 1rem 0;
+            border-radius: 14px;
+            padding: 0.5rem 0.8rem;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+        .state-title {
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 0.2rem;
+            color: #0c4a6e;
+        }
+        .warning {
+            background: #fee2e2;
+            border-left: 4px solid #dc2626;
+            padding: 0.3rem 0.6rem;
+            border-radius: 10px;
+            margin: 0.5rem 0;
+            font-size: 0.75rem;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.5rem 0;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 3px 5px;
+            text-align: center;
+            background-color: #fff;
+        }
+        th {
+            background-color: #e2edf2;
+            font-weight: bold;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        hr {
+            margin: 0.8rem 0;
+            border-color: #cbd5e1;
+        }
+        footer {
+            background: #f1f5f9;
+            padding: 0.4rem;
+            text-align: center;
+            font-size: 0.65rem;
+            color: #475569;
+            flex-shrink: 0;
+        }
+        @media (max-width: 780px) {
+            .split-pane {
+                flex-direction: column;
+            }
+            .left-panel {
+                border-right: none;
+                border-bottom: 1px solid #e0e8f0;
+            }
+            body {
+                height: auto;
+                overflow: auto;
+            }
+            .container {
+                height: auto;
+            }
+            .split-pane {
+                overflow: visible;
+            }
+            .left-panel, .right-panel {
+                overflow: visible;
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>LR(0) & SLR(1) 分析器</h1>
+        <p>输入文法 → 增广（产生式追加末尾） → 构造自动机 → 计算 FIRST/FOLLOW → 生成 SLR(1) 分析表</p>
+    </header>
+
+    <div class="split-pane">
+        <!-- 左侧：输入 + LR(0) 输出 -->
+        <div class="left-panel">
+            <div class="input-area">
+                <textarea id="grammarInput" rows="4" placeholder="示例文法 (符号间用空格隔开，支持|分割候选式)：
+E -> E + T | T
+T -> T * F | F
+F -> ( E ) | id"></textarea>
+                <div>
+                    <button id="buildBtn">构造 LR(0) + SLR(1)</button>
+                    <button id="exampleBtn" class="example-btn">载入示例文法</button>
+                </div>
+                <div style="margin-top: 0.4rem; font-size: 0.65rem; color: #4b5563;">
+                </div>
+            </div>
+            <div class="lr0-output" id="lr0Output">
+                <h3> LR(0) 结果</h3>
+                <div style="color: #6c757d;">点击上方按钮生成...</div>
+            </div>
+        </div>
+
+        <!-- 右侧：仅 SLR(1) 输出 -->
+        <div class="right-panel" id="slr1Output">
+            <h3> SLR(1) 结果</h3>
+            <div style="color: #6c757d;">点击上方按钮生成...</div>
+        </div>
+    </div>
+    <footer></footer>
+</div>
+
+<script>
+    // ---------- 辅助函数 ----------
+    function trim(s) { return s.replace(/^\s+|\s+$/g, ''); }
+    function splitBySpace(str) { return str.trim().split(/\s+/).filter(s => s.length > 0); }
+
+    function parseGrammar(text) {
+        const lines = text.split(/\r?\n/);
+        const productions = [];
+        for (let line of lines) {
+            line = trim(line);
+            if (line === "") continue;
+            let arrowPos = line.indexOf("->");
+            if (arrowPos === -1) continue;
+            let lhs = trim(line.substring(0, arrowPos));
+            let rhsPart = trim(line.substring(arrowPos + 2));
+            let alternatives = rhsPart.split('|').map(s => trim(s));
+            for (let alt of alternatives) {
+                let rhsSymbols = splitBySpace(alt);
+                if (rhsSymbols.length === 0 && alt !== "") rhsSymbols = [alt];
+                if (rhsSymbols.length > 0) productions.push({ lhs: lhs, rhs: rhsSymbols });
+            }
+        }
+        return productions;
+    }
+
+    function buildGrammar(productions) {
+        const nonTerminals = new Set();
+        const terminals = new Set();
+        for (let prod of productions) nonTerminals.add(prod.lhs);
+        for (let prod of productions)
+            for (let sym of prod.rhs)
+                if (!nonTerminals.has(sym)) terminals.add(sym);
+        let startSymbol = productions.length > 0 ? productions[0].lhs : null;
+        return { productions, nonTerminals, terminals, start: startSymbol };
+    }
+
+    // 重要：增广产生式追加到末尾（与C++一致）
+    function augmentGrammar(gram) {
+        const newStart = gram.start + "'";
+        const augmentedProds = [...gram.productions];
+        augmentedProds.push({ lhs: newStart, rhs: [gram.start] });
+        const newNonTerminals = new Set(gram.nonTerminals);
+        newNonTerminals.add(newStart);
+        return {
+            productions: augmentedProds,
+            nonTerminals: newNonTerminals,
+            terminals: new Set(gram.terminals),
+            start: newStart,
+            originalStart: gram.start
+        };
+    }
+
+    class Item {
+        constructor(prodIdx, dotPos) { this.prodIdx = prodIdx; this.dotPos = dotPos; }
+        key() { return `${this.prodIdx},${this.dotPos}`; }
+    }
+
+    function closure(itemsSet, grammar) {
+        let workList = Array.from(itemsSet);
+        let closureSet = new Map();
+        for (let it of itemsSet) closureSet.set(it.key(), it);
+        while (workList.length) {
+            let item = workList.shift();
+            let prod = grammar.productions[item.prodIdx];
+            if (item.dotPos < prod.rhs.length) {
+                let symbol = prod.rhs[item.dotPos];
+                if (grammar.nonTerminals.has(symbol)) {
+                    for (let i = 0; i < grammar.productions.length; i++) {
+                        let p = grammar.productions[i];
+                        if (p.lhs === symbol) {
+                            let newItem = new Item(i, 0);
+                            if (!closureSet.has(newItem.key())) {
+                                closureSet.set(newItem.key(), newItem);
+                                workList.push(newItem);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new Set(closureSet.values());
+    }
+
+    function goto(itemsSet, symbol, grammar) {
+        let moved = [];
+        for (let item of itemsSet) {
+            let prod = grammar.productions[item.prodIdx];
+            if (item.dotPos < prod.rhs.length && prod.rhs[item.dotPos] === symbol)
+                moved.push(new Item(item.prodIdx, item.dotPos + 1));
+        }
+        if (moved.length === 0) return new Set();
+        return closure(new Set(moved), grammar);
+    }
+
+    function itemToString(item, grammar) {
+        let prod = grammar.productions[item.prodIdx];
+        let rhsParts = [...prod.rhs];
+        let before = rhsParts.slice(0, item.dotPos);
+        let after = rhsParts.slice(item.dotPos);
+        let rhsDisplay = [...before, '.', ...after].join(' ');
+        if (item.dotPos === prod.rhs.length) rhsDisplay = [...before, '.'].join(' ');
+        return `${prod.lhs} -> ${rhsDisplay}`;
+    }
+
+    function buildLR0Automaton(grammar) {
+        let startProdIdx = -1;
+        for (let i = 0; i < grammar.productions.length; i++)
+            if (grammar.productions[i].lhs === grammar.start) { startProdIdx = i; break; }
+        if (startProdIdx === -1) throw new Error("起始产生式未找到");
+        const startItem = new Item(startProdIdx, 0);
+        let initialClosure = closure(new Set([startItem]), grammar);
+        let states = [];
+        let transitions = [];
+        let stateMap = new Map();
+
+        function serializeItemSet(itemSet) {
+            let items = Array.from(itemSet);
+            items.sort((a,b) => (a.prodIdx !== b.prodIdx) ? a.prodIdx - b.prodIdx : a.dotPos - b.dotPos);
+            return items.map(it => it.key()).join('|');
+        }
+        function addState(itemSet) {
+            let key = serializeItemSet(itemSet);
+            if (stateMap.has(key)) return stateMap.get(key);
+            let idx = states.length;
+            states.push(itemSet);
+            transitions.push({});
+            stateMap.set(key, idx);
+            return idx;
+        }
+        let initialIdx = addState(initialClosure);
+        let worklist = [initialIdx];
+        while (worklist.length) {
+            let curIdx = worklist.shift();
+            let curItems = states[curIdx];
+            let symbols = new Set();
+            for (let item of curItems) {
+                let prod = grammar.productions[item.prodIdx];
+                if (item.dotPos < prod.rhs.length) symbols.add(prod.rhs[item.dotPos]);
+            }
+            for (let sym of symbols) {
+                let nextSet = goto(curItems, sym, grammar);
+                if (nextSet.size === 0) continue;
+                let nextIdx = addState(nextSet);
+                transitions[curIdx][sym] = nextIdx;
+                if (nextIdx === states.length - 1) worklist.push(nextIdx);
+            }
+        }
+        return { states, transitions };
+    }
+
+    function detectConflicts(states, grammar) {
+        let conflicts = [];
+        for (let i = 0; i < states.length; i++) {
+            let items = states[i];
+            let shiftSymbols = new Set();
+            let reduceItems = [];
+            for (let it of items) {
+                let prod = grammar.productions[it.prodIdx];
+                if (it.dotPos === prod.rhs.length) reduceItems.push(it);
+                else {
+                    let nextSym = prod.rhs[it.dotPos];
+                    if (grammar.terminals.has(nextSym)) shiftSymbols.add(nextSym);
+                }
+            }
+            if (shiftSymbols.size > 0 && reduceItems.length > 0)
+                conflicts.push({ type: "shift-reduce", state: i, shiftSymbols: Array.from(shiftSymbols), reduceItems });
+            if (reduceItems.length >= 2)
+                conflicts.push({ type: "reduce-reduce", state: i, reduceItems });
+        }
+        return conflicts;
+    }
+
+    // ---------- FIRST / FOLLOW 计算 ----------
+    function computeNullableAndFirst(grammar) {
+        const nonTerms = grammar.nonTerminals;
+        const terms = grammar.terminals;
+        const first = new Map();
+        const nullable = new Set();
+        for (let t of terms) first.set(t, new Set([t]));
+        for (let nt of nonTerms) first.set(nt, new Set());
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let prod of grammar.productions) {
+                let lhs = prod.lhs;
+                let rhs = prod.rhs;
+                if (rhs.length === 0) {
+                    if (!nullable.has(lhs)) { nullable.add(lhs); changed = true; }
+                    continue;
+                }
+                let allNullable = true;
+                for (let sym of rhs) {
+                    let symFirst = first.get(sym) || new Set();
+                    for (let f of symFirst) {
+                        if (f !== 'ε' && !first.get(lhs).has(f)) {
+                            first.get(lhs).add(f);
+                            changed = true;
+                        }
+                    }
+                    if (!nullable.has(sym) && !symFirst.has('ε')) { allNullable = false; break; }
+                }
+                if (allNullable && !nullable.has(lhs)) { nullable.add(lhs); changed = true; }
+            }
+        }
+        return { first, nullable };
+    }
+
+    function computeFollow(grammar, first, nullable, startSymbol) {
+        const follow = new Map();
+        for (let nt of grammar.nonTerminals) follow.set(nt, new Set());
+        follow.get(startSymbol).add('$');
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let prod of grammar.productions) {
+                let lhs = prod.lhs;
+                let rhs = prod.rhs;
+                for (let i = 0; i < rhs.length; i++) {
+                    let B = rhs[i];
+                    if (!grammar.nonTerminals.has(B)) continue;
+                    let firstBeta = new Set();
+                    let allNullableBeta = true;
+                    for (let j = i+1; j < rhs.length; j++) {
+                        let sym = rhs[j];
+                        let fSet = first.get(sym) || new Set();
+                        for (let f of fSet) if (f !== 'ε') firstBeta.add(f);
+                        if (!nullable.has(sym) && !fSet.has('ε')) { allNullableBeta = false; break; }
+                    }
+                    for (let f of firstBeta) {
+                        if (!follow.get(B).has(f)) { follow.get(B).add(f); changed = true; }
+                    }
+                    if (allNullableBeta || i === rhs.length-1) {
+                        for (let f of follow.get(lhs)) {
+                            if (!follow.get(B).has(f)) { follow.get(B).add(f); changed = true; }
+                        }
+                    }
+                }
+            }
+        }
+        return follow;
+    }
+
+    function buildSLRTable(grammar, states, transitions, follow) {
+        const terminals = Array.from(grammar.terminals);
+        terminals.push('$');
+        const nonTerms = Array.from(grammar.nonTerminals).filter(nt => nt !== grammar.start);
+        let action = [];
+        let gotoTable = [];
+        for (let i = 0; i < states.length; i++) {
+            action.push({});
+            gotoTable.push({});
+        }
+        // 移进
+        for (let i = 0; i < states.length; i++) {
+            for (let item of states[i]) {
+                let prod = grammar.productions[item.prodIdx];
+                if (item.dotPos < prod.rhs.length) {
+                    let sym = prod.rhs[item.dotPos];
+                    if (grammar.terminals.has(sym)) {
+                        let nextState = transitions[i][sym];
+                        if (nextState !== undefined) action[i][sym] = `s${nextState}`;
+                    }
+                }
+            }
+        }
+        // 归约 / 接受
+        for (let i = 0; i < states.length; i++) {
+            for (let item of states[i]) {
+                let prod = grammar.productions[item.prodIdx];
+                if (item.dotPos === prod.rhs.length) {
+                    if (prod.lhs === grammar.start && prod.rhs.length === 1 && prod.rhs[0] === grammar.originalStart) {
+                        action[i]['$'] = 'acc';
+                    } else {
+                        let followSet = follow.get(prod.lhs) || new Set();
+                        for (let term of followSet) {
+                            if (grammar.terminals.has(term) || term === '$') {
+                                if (!action[i][term]) action[i][term] = `r${item.prodIdx}`;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // GOTO
+        for (let i = 0; i < transitions.length; i++) {
+            for (let [sym, next] of Object.entries(transitions[i])) {
+                if (grammar.nonTerminals.has(sym) && sym !== grammar.start)
+                    gotoTable[i][sym] = next;
+            }
+        }
+        return { action, gotoTable, terminals, nonTerms };
+    }
+
+    // ---------- 生成 HTML 片段 ----------
+    function generateLR0HTML(grammar, states, transitions, conflicts) {
+        let html = `<div class="state-block"><div class="state-title"> 增广文法</div>`;
+        for (let p of grammar.productions) html += `<div>${p.lhs} -> ${p.rhs.join(' ')}</div>`;
+        html += `</div>`;
+
+        html += `<div class="state-block"><div class="state-title"> LR(0) 项目集规范族</div>`;
+        for (let i = 0; i < states.length; i++) {
+            let items = Array.from(states[i]);
+            items.sort((a,b) => (a.prodIdx !== b.prodIdx) ? a.prodIdx - b.prodIdx : a.dotPos - b.dotPos);
+            html += `<div style="margin-top: 6px;"><strong>State ${i}:</strong><br>`;
+            for (let it of items) html += `&nbsp;&nbsp;&nbsp;${itemToString(it, grammar)}<br>`;
+            html += `</div>`;
+        }
+        html += `</div>`;
+
+        html += `<div class="state-block"><div class="state-title"> Goto 转移</div>`;
+        for (let i = 0; i < transitions.length; i++) {
+            for (let [sym, target] of Object.entries(transitions[i]))
+                html += `<div>State ${i} --${sym}--> State ${target}</div>`;
+        }
+        html += `</div>`;
+
+        html += `<div class="state-block"><div class="state-title"> LR(0) 冲突检测</div>`;
+        if (conflicts.length === 0) html += `<div style="color: #2b6e3c;"> 该文法是 LR(0) 文法，无冲突。</div>`;
+        else {
+            html += `<div style="color: #b91c1c;"> 该文法不是 LR(0) 文法，发现冲突：</div>`;
+            for (let cf of conflicts) {
+                if (cf.type === "shift-reduce") {
+                    html += `<div class="warning">⚠ 状态 ${cf.state} : 移进-归约冲突<br>移进符号: ${cf.shiftSymbols.join(', ')}<br>归约项目: ${cf.reduceItems.map(it => itemToString(it, grammar)).join(' ; ')}</div>`;
+                } else {
+                    html += `<div class="warning">⚠ 状态 ${cf.state} : 归约-归约冲突<br>归约项目: ${cf.reduceItems.map(it => itemToString(it, grammar)).join(' ; ')}</div>`;
+                }
+            }
+        }
+        html += `</div>`;
+        return html;
+    }
+
+    function generateSLR1HTML(grammar, firstMap, followMap, actionTable, gotoTable, terminals, nonTerms) {
+        let html = `<div class="state-block"><div class="state-title"> FIRST 集</div>`;
+        let firstList = Array.from(firstMap.entries()).sort((a,b)=>a[0].localeCompare(b[0]));
+        for (let [sym, set] of firstList) {
+            let arr = Array.from(set).filter(s => s !== 'ε');
+            html += `<div>FIRST(${sym}) = { ${arr.join(', ')} }</div>`;
+        }
+        html += `</div>`;
+
+        html += `<div class="state-block"><div class="state-title"> FOLLOW 集</div>`;
+        let followList = Array.from(followMap.entries()).sort((a,b)=>a[0].localeCompare(b[0]));
+        for (let [sym, set] of followList) {
+            let arr = Array.from(set);
+            html += `<div>FOLLOW(${sym}) = { ${arr.join(', ')} }</div>`;
+        }
+        html += `</div>`;
+
+        // ACTION 表
+        let termCols = [...terminals].sort();
+        html += `<div class="state-block"><div class="state-title"> ACTION 表</div><div class="table-wrapper">`;
+        html += `<table><thead><tr><th>状态</th>${termCols.map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>`;
+        for (let i = 0; i < actionTable.length; i++) {
+            html += `<tr><td>${i}</td>`;
+            for (let t of termCols) {
+                let act = actionTable[i][t] || '';
+                html += `<td>${act === '' ? '&nbsp;' : act}</td>`;
+            }
+            html += `</tr>`;
+        }
+        html += `</tbody></table></div></div>`;
+
+        // GOTO 表
+        let nontermCols = [...nonTerms].sort();
+        if (nontermCols.length) {
+            html += `<div class="state-block"><div class="state-title"> GOTO 表</div><div class="table-wrapper">`;
+            html += `<table><thead><tr><th>状态</th>${nontermCols.map(nt => `<th>${nt}</th>`).join('')}</tr></thead><tbody>`;
+            for (let i = 0; i < gotoTable.length; i++) {
+                html += `<tr><td>${i}</td>`;
+                for (let nt of nontermCols) {
+                    let val = gotoTable[i][nt];
+                    html += `<td>${val !== undefined ? val : '&nbsp;'}</td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table></div></div>`;
+        } else {
+            html += `<div class="state-block"><div class="state-title"> GOTO 表</div><div>无非终结符转移</div></div>`;
+        }
+        return html;
+    }
+
+    // 主控函数
+    function computeAll(inputText) {
+        let productions = parseGrammar(inputText);
+        if (productions.length === 0) throw new Error("没有有效的产生式！");
+        let basicGrammar = buildGrammar(productions);
+        let augmented = augmentGrammar(basicGrammar);
+        let { states, transitions } = buildLR0Automaton(augmented);
+        let conflicts = detectConflicts(states, augmented);
+        let { first, nullable } = computeNullableAndFirst(augmented);
+        let follow = computeFollow(augmented, first, nullable, augmented.start);
+        let { action, gotoTable, terminals, nonTerms } = buildSLRTable(augmented, states, transitions, follow);
+        return { augmented, states, transitions, conflicts, first, follow, action, gotoTable, terminals, nonTerms };
+    }
+
+    function renderAll() {
+        const input = document.getElementById('grammarInput').value;
+        if (!input.trim()) {
+            document.getElementById('lr0Output').innerHTML = `<h3> LR(0) 结果</h3><div style="color:#a00;">请输入文法</div>`;
+            document.getElementById('slr1Output').innerHTML = `<h3> SLR(1) 结果</h3><div style="color:#a00;">请输入文法</div>`;
+            return;
+        }
+        try {
+            const data = computeAll(input);
+            const lr0Html = generateLR0HTML(data.augmented, data.states, data.transitions, data.conflicts);
+            const slrHtml = generateSLR1HTML(data.augmented, data.first, data.follow, data.action, data.gotoTable, data.terminals, data.nonTerms);
+            document.getElementById('lr0Output').innerHTML = `<h3> LR(0) 结果</h3>${lr0Html}`;
+            document.getElementById('slr1Output').innerHTML = `<h3> SLR(1) 结果</h3>${slrHtml}`;
+        } catch (err) {
+            document.getElementById('lr0Output').innerHTML = `<h3> LR(0) 结果</h3><div style="color:#c00;">错误: ${err.message}</div>`;
+            document.getElementById('slr1Output').innerHTML = `<h3> SLR(1) 结果</h3><div style="color:#c00;">请检查文法格式</div>`;
+        }
+    }
+
+    // 事件绑定
+    const buildBtn = document.getElementById('buildBtn');
+    const exampleBtn = document.getElementById('exampleBtn');
+    const grammarTextarea = document.getElementById('grammarInput');
+    const defaultExample = `E -> E + T | T\nT -> T * F | F\nF -> ( E ) | id`;
+
+    function setExample() {
+        grammarTextarea.value = defaultExample;
+        renderAll();
+    }
+
+    buildBtn.addEventListener('click', renderAll);
+    exampleBtn.addEventListener('click', setExample);
+    setExample(); // 初始加载示例
+</script>
+</body>
+</html
